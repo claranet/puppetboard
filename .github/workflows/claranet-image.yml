@@ -1,0 +1,33 @@
+name: Claranet image
+
+# Builds the image deployed by Claranet until the Packages page is released
+# upstream (voxpupuli/puppetboard#1503). The claranet organisation only allows
+# GitHub-owned actions, hence plain docker commands.
+on:
+  push:
+    branches:
+      - claranet
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and push the image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+          tag="${version}-packages-${GITHUB_SHA::7}"
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build \
+            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            -t "$IMAGE:$tag" .
+          docker push "$IMAGE:$tag"
+          echo "Image: \`$IMAGE:$tag\`" >> "$GITHUB_STEP_SUMMARY"
